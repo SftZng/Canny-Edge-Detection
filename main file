@@ -1,0 +1,601 @@
+#include <iostream>
+#include <opencv2/opencv.hpp>
+using namespace cv;
+using namespace std;
+
+void Canny(int **arrOut, int row, int col, int **arrOut2, int **non_maxima_subration, float **edge_image, float* edge_image_check, int* edge_image_check2) {
+    int mask[3][3] = {{0,1,1},{-1,0,1},{-1,-1,0}};
+    //cout << "row"<<row<<endl<<"col"<<col<<endl;
+    //cout << arrOut.size();
+    //int siz_arrOut = sizeof(arrOut) / sizeof(*(arrOut + 1));
+    //cout << siz_arrOut << endl<< *(arrOut + 1);
+    //cout << arrOut << endl<<*arrOut<<endl;
+    //cout << *(*(arrOut + 0) + 0)<<endl;
+
+    //Derivative
+    for (int i = 0; i < row+1; i++) {
+        for (int j = 0; j < col+1; j++) {
+            //cout << i << endl << *(arrOut)<<endl;
+            int sum_arr = 0;
+            for (int k = 0; k < 3; k++) {
+                for (int l = 0; l < 3; l++) {
+                    sum_arr += arrOut[i + k][j + l] * mask[k][l];
+
+                }
+            }
+
+            arrOut2[i][j] = sum_arr;
+
+            /*
+            int value1 = *(*(arrOut + i)+ j) * mask[0];
+            int value2 = *(*(arrOut + i)+ j+1) * mask[1];
+            int value3 = *(*(arrOut + i)+ j+2) * mask[2];
+
+            int value4 = *(*(arrOut + (i+1))   + j) * mask[3];
+            int value5 = *(*(arrOut + (i + 1)) + j+1) * mask[4];
+            int value6 = *(*(arrOut + (i + 1)) + j+2) * mask[5];
+
+            int value7 = *(*(arrOut + (i + 2)) + j) * mask[6];
+            int value8 = *(*(arrOut + (i + 2)) + j+1) * mask[7];
+            int value9 = *(*(arrOut + (i + 2)) + j+2) * mask[8];
+
+            *(*(arrOut2+i)+j) = value1 + value2 + value3 + value4 + value5 + value6 + value7 + value8 + value9;
+            */
+            //cout << arrOut2[i][j] << "  ";
+            
+        };
+       // cout << endl;
+    };  //cout << endl;
+    //cout << sizeof(arrOut2) / sizeof(int);
+    //cout << row << endl;
+    //cout << col << endl;
+    //cout << *(arrOut2 + 2);
+
+
+    //non maxima subration
+    non_maxima_subration[0][0]= arrOut2[0][0];
+    non_maxima_subration[row][col] = arrOut2[row ][col ];
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < col; j++) {
+
+            if (arrOut2[i][j + 1] >= arrOut2[i + 1][j]) {
+                non_maxima_subration[i + 1][j] = 0;
+
+                if (non_maxima_subration[i][j + 1] != 0) {
+                    non_maxima_subration[i][j + 1] = arrOut2[i][j + 1];
+                }
+
+                if (non_maxima_subration[i][j + 1] == 0) {
+                    non_maxima_subration[i][j + 1] = 0;
+                }
+
+            }
+
+            else { 
+                non_maxima_subration[i][j + 1] = 0; 
+                non_maxima_subration[i + 1][j] = arrOut2[i + 1][j];
+            
+            }
+
+            
+            //cout << "ok"<<arrOut2[i][j + 1] << " " << arrOut2[i + 1][j] << endl;
+            //cout << non_maxima_subration[i + 1][j] << " " << non_maxima_subration[i][j + 1] << endl;
+        }
+        
+        
+    }   
+
+    /*
+    for (int i = 0; i < row+1; i++) {
+        for (int j = 0; j < col+1; j++) {
+         //   cout << non_maxima_subration[i][j] << "  ";
+        }
+       // cout << endl;
+    }//cout << endl;*/
+
+    //Obtaine Histogram
+
+    int min_value = 0; 
+    int max_value = 0;
+    for (int i = 0; i < row+1; i++) {
+        for (int j = 0; j < col+1; j++) {
+            //hist_arr[non_maxima_subration[i][j]] += 1;
+            //cout<<non_maxima_subration[i][j]<<endl;
+            if (non_maxima_subration[i][j] < min_value) {
+                min_value = non_maxima_subration[i][j];
+            }
+            if (non_maxima_subration[i][j] > max_value) {
+                max_value = non_maxima_subration[i][j];
+            }
+            //cout << min_value << endl << max_value << endl;
+        }
+    }
+     //cout << "min value:" << min_value << endl << "max value:" << max_value << endl;
+     int sub_min = 0;
+     if (sub_min > min_value) {
+         sub_min = -min_value;
+     }
+
+     /*else {
+         sub_min = min_value;
+     }*/
+
+     int hist_arrange = max_value - min_value + 1;
+     int* hist_arr = new int[hist_arrange];
+     for (int j = 0; j < hist_arrange; j++) {
+         hist_arr[j] = 0;
+     }
+
+     for (int i = 0; i < row + 1; i++) {
+         for (int j = 0; j < col + 1; j++) {
+             hist_arr[non_maxima_subration[i][j]+sub_min] += 1;
+         }
+     }
+     
+     int sum_hist = 0;
+     for (int j = 0; j < hist_arrange - 1; j++) {
+         //cout<<hist_arr[j];
+         sum_hist+= hist_arr[j];
+     }
+     //cout << sum_hist;
+
+     int tlow = 0;
+     int thigh = 0;
+     int pdf_sum = 0;
+     bool control1 = true;
+     bool control2 = true;
+     for (int j = 0; j < hist_arrange - 1; j++) {
+         //cout<<hist_arr[j];
+         pdf_sum += hist_arr[j];
+         //cout << pdf_sum << endl;
+         if ((pdf_sum >= sum_hist * 0.1) && control1 ){
+             tlow = j;
+             control1 = false;
+             //cout << "min hist:"<<j << endl;
+         }
+
+         if ((pdf_sum >= sum_hist *0.9) && control2) {
+             thigh = j;
+             control2 = false;
+             //cout <<"max hist:"<< j << endl;
+         }
+     }
+
+     for (int i = 0; i < row+1 ; i++) {
+         for (int j = 0; j < col+1 ; j++) {
+
+             if (non_maxima_subration[i][j] <= tlow) {
+                 non_maxima_subration[i][j] = tlow;
+             }
+             if (non_maxima_subration[i][j] >= thigh) {
+                 non_maxima_subration[i][j] = thigh;
+             }
+
+             //cout << non_maxima_subration[i][j] << "  ";
+         }//cout << endl;
+     }//cout << endl;
+
+
+
+     bool control3 = true;
+     while (control3) {
+         bool control4 = true;
+         for (int i = 0; i < row ; i++) {
+             for (int j = 0; j < col ; j++) {
+
+                 if (!((non_maxima_subration[i][j] == thigh || tlow) && (non_maxima_subration[i + 1][j + 1] == thigh || tlow))) {
+                     if ((non_maxima_subration[i][j] == thigh || tlow)) {
+                         non_maxima_subration[i + 1][j + 1] = non_maxima_subration[i][j];
+                         control4 = false;
+                     }
+                     if ((non_maxima_subration[i + 1][j + 1] == thigh || tlow)) {
+                         non_maxima_subration[i][j] = non_maxima_subration[i + 1][j + 1];
+                         control4 = false;
+                     }
+
+                 }
+
+             }
+         }
+         if (control4) {
+             control3 = false;
+         }
+     }
+
+     /*for (int i = 0; i < row + 1; i++) {
+         for (int j = 0; j < col + 1; j++) {
+            // cout << non_maxima_subration[i][j] << "  ";
+         }
+         //cout << endl;
+     }//cout << endl;*/
+
+     //cout << abs(-1);
+
+     if (abs(non_maxima_subration[0][col ]-tlow) >= abs(non_maxima_subration[0][col ] - thigh)){
+
+         non_maxima_subration[0][col ] = thigh;
+     }
+
+     if (abs(non_maxima_subration[0][col ] - tlow) < abs(non_maxima_subration[0][col ] - thigh)) {
+
+         non_maxima_subration[0][col ] = tlow;
+     }
+
+
+     if (abs(non_maxima_subration[row ][0] - tlow) >= abs(non_maxima_subration[row ][0] - thigh)) {
+
+         non_maxima_subration[row ][0] = thigh;
+     }
+
+     if (abs(non_maxima_subration[row ][0] - tlow) < abs(non_maxima_subration[row ][0] - thigh)) {
+
+         non_maxima_subration[row ][0] = tlow;
+     }
+     /*
+     for (int i = 0; i < row + 1; i++) {
+         for (int j = 0; j < col + 1; j++) {
+             cout << non_maxima_subration[i][j] << "  ";
+         }
+         cout << endl;
+     }cout << endl;*/
+
+     int l = 0;
+     for (int i = 0; i < row + 1; i++) {
+         for (int j = 0; j < col + 1; j++) {
+             //cout << non_maxima_subration[i][j] << endl;
+             if (non_maxima_subration[i][j]==thigh){
+                 edge_image[i][j] = (i+1) * (sqrt(2) / 2) - (j+1) * (sqrt(2) / 2);
+                 bool control5 = false;
+                 for (int k = 0; k < l+1; k++) {
+                     //cout << edge_image_check[k] << endl;
+                     if (edge_image_check[k] == edge_image[i][j]) {
+                            edge_image_check2[k] += 1;  
+                            control5 = true;
+                     }
+
+                  }
+
+                if (control5 == false) {
+                    edge_image_check[l] = edge_image[i][j];
+                    edge_image_check2[l] += 1;
+                    //cout << edge_image_check[l]<<"--" << edge_image[i][j] << endl;
+                    l++;
+                }
+                 
+                 //cout<< i * sqrt(2) / 2 - j * sqrt(2) / 2;
+             }
+
+             if (non_maxima_subration[i][j] == tlow) {
+                 edge_image[i][j] = -11;//tlow;
+             }
+             //cout << edge_image[i][j]<<"  ";
+         }//cout << endl;
+     }//cout << endl;
+     
+    /* //cout << tlow << endl;
+     for (int t = 0; t < l + 1; t++) {
+         cout << edge_image_check[t] << ":"<<edge_image_check2[t]<<endl;
+     
+     }*/
+
+     int *maxtominarray=new int[l+1];
+     for (int j = 0; j < l + 1; j++) {
+         int max_value2 = 0;
+         int max_index = 0;
+         for (int i = 0; i < l + 1 ; i++) {
+             //cout << edge_image_check2[i] << "  ";
+             //cout << edge_image_check[i] << "  ";
+             if (max_value2 < edge_image_check2[i]) {
+                 max_value2 = edge_image_check2[i];
+                 max_index = i;
+             }
+
+         } //cout << endl;
+         maxtominarray[j] = max_index;  
+         edge_image_check2[max_index]=-111;
+         //cout << maxtominarray[j] << "  "<<endl;
+     }
+     //cout << max_value2 << endl;
+
+
+
+     for (int i = 0; i < row +1; i++) {
+         for (int j = 0; j < col+1 ; j++) {
+             
+             for (int k = 0; k < 2; k++) {
+                 if (edge_image[i][j] == edge_image_check[maxtominarray[k]]){
+                     edge_image[i][j] = 255;
+
+                 }
+
+                
+             }
+
+             if (edge_image[i][j] != 255) {
+                                 edge_image[i][j] = 0;
+                             }
+
+             //cout << edge_image[i][j] << "  ";
+         }
+         //cout << endl;
+     }   //cout << endl;
+
+     //double d4[2][2] = { {1,2},{3,2} };
+     //Mat img(row+1, col+1, CV_8U, d4);
+     
+     Mat img = Mat( col + 1,row + 1, CV_8U, (unsigned*)edge_image).clone();
+     cout << img;
+
+     //imshow("Canny", img);
+     //waitKey(0);
+};
+
+
+
+
+
+// Driver code
+int main(int argc, char** argv)
+{
+
+    bool video = false;
+    bool image = false;
+    bool direct_array = true;
+
+
+
+    if (!video && !image && direct_array) {
+        
+        
+        int ar_size = 6;
+        int ar2_size = 6;
+        cout << ar_size << endl << ar2_size << endl;
+        int** arrOut = new int* [ar_size];
+        int** arrOut2 = new int* [ar_size - 2];
+        int** non_maxima_subration = new int* [ar_size - 2];
+        float** edge_image = new float* [ar_size - 2];
+        float* edge_image_check = new float[(ar_size - 2) * (ar2_size - 2)];
+        int* edge_image_check2 = new int[(ar_size - 2) * (ar2_size - 2)];
+
+        
+
+        for (int i = 0; i < (ar_size - 2) * (ar2_size - 2); i++) {
+            edge_image_check2[i] = 0;
+        }
+
+
+        for (int j = 0; j < ar_size; j++) {
+            //cout << new int[ar2_size];
+            arrOut[j] = new int[ar2_size];
+            arrOut2[j] = new int[ar2_size - 2];
+            non_maxima_subration[j] = new int[ar2_size - 2];
+            edge_image[j] = new float[ar2_size - 2];
+
+
+        }
+        int arrout[6][6] = {{2,6,7,6,2,2},{2,3,6,5,5,2},{2,2,3,7,6,7},{6,6,2,1,7,6},{3,5,0,2,0,6},{6,1,3,0,0,5}};
+        for (int i = 0; i < ar_size; i++) {
+            for (int j = 0; j < ar2_size; j++) {
+                arrOut[i][j] = arrout[i][j];
+
+            }
+        }
+        //cout << arrOut[0] << endl << arrOut[0][0] << endl;
+
+        Canny(arrOut, ar_size - 3, ar2_size - 3, arrOut2, non_maxima_subration, edge_image, edge_image_check, edge_image_check2);
+        //const Mat img(ar_size, ar2_size, CV_8U, arrOut);
+        //cout << img;
+        //imshow("Canny", img);
+        //waitKey(0);
+
+        return 0;
+
+    }
+
+
+    if (!video && image) {
+
+        Mat image = imread("C:file name.jpg" , IMREAD_GRAYSCALE);
+        Mat image3;
+
+
+        Mat image2;
+        image.convertTo(image2, CV_32F);
+        //cout << image2.rows<<endl;
+        int row_size = image.rows;
+        //cout << row_size << endl<<;
+        int ar_size = image2.rows;
+        int ar2_size = image2.cols;
+        cout << ar_size << endl << ar2_size << endl;;
+        int** arrOut = new int* [ar_size];
+        int** arrOut2 = new int* [ar_size - 2];
+        int** non_maxima_subration = new int* [ar_size - 2];
+        float** edge_image = new float* [ar_size - 2];
+        float* edge_image_check = new float[(ar_size - 2)*(ar2_size - 2)];
+        int* edge_image_check2 = new int[(ar_size - 2) * (ar2_size - 2)];
+
+
+        for (int i = 0; i < (ar_size - 2) * (ar2_size - 2); i++) {
+            edge_image_check2[i] = 0;
+        }
+
+
+        for (int j = 0; j < ar_size; j++) {
+            //cout << new int[ar2_size];
+            arrOut[j] = new int[ar2_size];
+            arrOut2[j] = new int[ar2_size - 2];
+            non_maxima_subration[j] = new int[ar2_size - 2];
+            edge_image[j]= new float[ar2_size - 2];
+            
+
+        }
+
+
+        //int arrOut [185][208];
+        //cout << image.rows<<endl<<image2.cols<<endl;
+        for (int i = 0; i < image2.rows - 1; ++i) {
+            for (int j = 0; j < image2.cols - 1; ++j) {
+                arrOut[i][j] = (int)image2.at<float>(i, j);
+                //arrOut2[i][j] = (int)image2.at<float>(i, j);
+                //cout << arrOut2[i][j]<<endl<<*(* (arrOut + i)+j)<<endl;
+                //cout << arrOut[i][j] << endl;
+               //image2.at<int>(i, j);
+
+            }
+        }
+        //cout << arrOut << endl;
+        //cout << *arrOut << endl;
+        //int siz_arrOut = sizeof(arrOut[0]) / sizeof(arrOut[0][0]);
+
+        Canny(arrOut, ar_size - 3, ar2_size - 3, arrOut2, non_maxima_subration, edge_image, edge_image_check, edge_image_check2);
+        //const Mat img(ar_size, ar2_size, CV_8U, arrOut);
+        //cout << img;
+        //imshow("Canny", img);
+        //waitKey(0);
+
+        return 0;
+
+    }
+
+
+
+
+    if (video && !image) {
+
+        Mat image;
+        Mat image3;
+
+
+        // Read the image file as
+        // imread("default.jpg");
+        //Mat image;// = imread("C:/file name.jpg", IMREAD_GRAYSCALE);
+        //Mat image3;
+        // Show Image inside a window with
+        // the name provided
+        //imshow("Window Name", image);
+
+        // Wait for any keystroke
+        //waitKey(0);
+        namedWindow("Display window");
+
+        VideoCapture cap(0);
+        while (true) {
+            cap >> image3;
+            cvtColor(image3, image, COLOR_BGR2GRAY);
+            imshow("Display window", image);
+
+
+            Mat image2;
+            image.convertTo(image2, CV_32F);
+            //cout << image2.rows<<endl;
+            int col_size = image.rows;
+            cout << col_size << endl;
+            int ar_size = image2.rows;
+            int ar2_size = image2.cols;
+            cout << ar_size;
+            int** arrOut = new int* [ar_size];
+            int** arrOut2 = new int* [ar_size - 2];
+            int** non_maxima_subration = new int* [ar_size - 2];
+            int** edge_image = new int* [ar_size - 2];
+
+            for (int j = 0; j < ar_size; j++) {
+                //cout << new int[ar2_size];
+                arrOut[j] = new int[ar2_size];
+                arrOut2[j] = new int[ar2_size - 2];
+                non_maxima_subration[j] = new int[ar2_size - 2];
+                edge_image[j] = new int[ar2_size - 2];
+            }
+
+
+            //int arrOut [185][208];
+            //cout << image.rows<<endl<<image2.cols<<endl;
+            for (int i = 0; i < image2.rows - 1; ++i) {
+                for (int j = 0; j < image2.cols - 1; ++j) {
+                    arrOut[i][j] = (int)image2.at<float>(i, j);
+                    //arrOut2[i][j] = (int)image2.at<float>(i, j);
+                    //cout << arrOut2[i][j]<<endl<<*(* (arrOut + i)+j)<<endl;
+
+                   //image2.at<int>(i, j);
+
+                }
+            }
+            cout << arrOut << endl;
+            cout << *arrOut << endl;
+            int siz_arrOut = sizeof(arrOut[0]) / sizeof(arrOut[0][0]);
+            //cout << siz_arrOut << endl;
+            //arrOut[180][200] = 14;
+            //Canny(arrOut, ar_size - 3, ar2_size - 3, arrOut2, non_maxima_subration, edge_image);
+
+            //delete[]arrOut;
+            //delete[]arrOut2;
+            //int deneme = image.at<Vec2b>(0, 1)[0];
+
+            //cout << (int) image.at<Vec2b>(0, 1)[0] << endl;
+            //cout<< image2.at<float>(0,0);
+            //cout << deneme;
+            //cout << image;
+            //cout <<endl<< *(*(arrOut + 1) + 1) << endl ;
+            //cout << arrOut[1][1] << endl;
+            //cout << *(*(image2+1)+1) << endl;
+
+
+            //cout << (arrOut + 2);
+            /*
+            int *img_ptr = *arrOut;
+            *img_ptr = 11;
+            *(img_ptr+1) = 12;
+            arrOut[1][0] = 13;
+            arrOut[1][1] = 14;
+            cout << (img_ptr ) << endl;
+            cout << *(img_ptr+209) << endl;
+            cout << *( * (arrOut+1)+1) << endl;
+            cout << arrOut << endl;
+            */
+
+            /*
+                int ar_size = 10;
+                int ar2_size = 5;
+                int **my_array = new int*[ar_size];
+
+
+                for (int j = 0; j < ar_size; j++) {
+                     //cout << new int[ar2_size];
+                     my_array[j] = new int[ar2_size];
+                     cout << my_array[j] << endl;
+                     cout << *my_array[j] << endl;
+                }*/
+
+                /*
+                    for (int i = 0; i < image2.rows; ++i)
+                        for (int j = 0; j < image2.cols; ++j)
+                        {
+                            cout << arrOut[i][j] << " ";
+                            if (j == (image2.cols - 1))
+                                cout << endl;
+                        }*/
+
+                        // cout << arrOut[0][0] << " ";
+                         // Error Handling
+            if (image.empty()) {
+                cout << "Image File "
+                    << "Not Found" << endl;
+
+                // wait for any key press
+                cin.get();
+                return -1;
+            }
+
+            //Mat* ptr = &image;
+            //cout <<  image.rows<<endl<<image.cols;
+            // Show Image inside a window with
+            // the name provided
+            //imshow("Window Name", image);
+
+            // Wait for any keystroke
+            //waitKey(0);
+            waitKey(25);
+        }
+    }
+        return 0;
+    
+    }
